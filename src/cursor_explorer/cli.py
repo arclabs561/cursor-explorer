@@ -890,14 +890,14 @@ def build_parser() -> argparse.ArgumentParser:
 	sp.add_argument("memory_json", help="Memory JSON path from mem-extract")
 	sp.add_argument("--query", required=True)
 	sp.add_argument("--k", type=int, default=10)
-	sp.set_defaults(func=lambda a: print(json.dumps(memmod.search_memory(a.memory_json, a.query, a.k), ensure_ascii=False, indent=2)))
+	sp.set_defaults(func=lambda a: print(json.dumps({"error": "memory module not available"}, ensure_ascii=False, indent=2)))
 
 	# Rules extraction with signals
 	sp = sub.add_parser("rules-extract", parents=[parent], help="Extract user rules (preferences/decisions) with clarity/context and satisfaction signals")
 	sp.add_argument("index_jsonl", help="Source index JSONL path")
 	sp.add_argument("out_json", help="Output rules JSON path")
 	sp.add_argument("--limit", type=int)
-	sp.set_defaults(func=lambda a: print(json.dumps(memmod.extract_rules_with_signals(a.index_jsonl, a.out_json, limit=a.limit), ensure_ascii=False, indent=2)))
+	sp.set_defaults(func=lambda a: print(json.dumps({"error": "memory module not available"}, ensure_ascii=False, indent=2)))
 
 	sp = sub.add_parser("streams", parents=[parent], help="Analyze user message transitions into streams and label transitions")
 	sp.add_argument("index_jsonl", help="Source index JSONL path")
