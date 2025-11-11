@@ -42,10 +42,7 @@ def read_seeds(seed_args: List[str] | None, seed_file: str | None) -> List[str]:
 
 
 def _validate_llm_schema(obj: Dict) -> List[str]:
-	# Prefer Pydantic models when available
-	if pmodels.have_pydantic():
-		ok, _ = pmodels.validate_annotation(obj)
-		return [] if ok else ["pydantic_error"]
+	# Simple dict validation (Pydantic removed)
 	required = [
 		"user_summary",
 		"assistant_summary",

@@ -324,11 +324,7 @@ def summarize_clusters(tree_json: str, index_jsonl: str, out_json: str, max_samp
 		text = resp.choices[0].message.content or "{}"
 		try:
 			obj = json.loads(text)
-			if pmodels.have_pydantic():
-				ok, norm = pmodels.validate_cluster_summary(obj)
-				node["summary"] = norm if ok else obj
-			else:
-				node["summary"] = obj
+			node["summary"] = obj
 		except Exception:
 			node["summary_raw"] = text
 		if "left" in node:
