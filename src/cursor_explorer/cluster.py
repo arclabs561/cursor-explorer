@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple, Any
 import llm_helpers as llmmod
 from .paths import expand_abs
 from .embeddings import l2_normalize
-from . import pyd_models as pmodels
+# pyd_models removed - using dicts directly
 
 
 def _build_text_from_item(obj: Dict[str, Any]) -> str:
