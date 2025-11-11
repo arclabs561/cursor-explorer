@@ -1,0 +1,19 @@
+#!/bin/bash
+
+if [ -n "$1" ]; then
+  levels="$1"
+else
+  levels="2"
+fi
+for fn in $(find . -maxdepth $levels -xtype l); do
+  if [ ! -e "$fn" ]; then
+    if [ "$(uname -s)" = "Darwin" ]; then
+      # macOS stat format
+      date_str=$(stat -f "%Sm" -t "%Y-%m-%d" "$fn" 2>/dev/null || echo "unknown")
+    else
+      # Linux stat format
+      date_str=$(stat -c %z "$fn" 2>/dev/null | awk '{print $1}' || echo "unknown")
+    fi
+    echo "$fn##${DIM:-}$date_str${NC:-}"
+  fi
+done | column -t -s'##'

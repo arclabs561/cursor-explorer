@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+print_status() {
+  echo "==> $1"
+}
+
+usage() {
+  cat <<'EOF'
+Usage: u [--deep] [--debug] [--help]
+
+Quick, cross-platform system updates.
+
+Options:
+  --deep        Perform extended dev updates (brew update-reset, LSP, Python, Neovim)
+  --debug, -x   Print commands as they execute
+  --help, -h    Show this help and exit
+
+Notes:
+  - Also accepts --dep as an alias for --deep.
+  - Skips tools that are not installed.
+EOF
+}
+
+has() { command -v "$1" >/dev/null 2>&1; }
+
+DEEP=0
+DEBUG=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --deep|--dep) DEEP=1 ;;
+    --debug|-x)   DEBUG=1 ;;
+    --help|-h)    usage; exit 0 ;;
+    *)
+      echo "Unknown option: $arg" >&2
+      usage
+      exit 2
+      ;;
+  esac
+done
+
+if [ "$DEBUG" -eq 1 ]; then set -x; fi
+
+uname_s=$(uname -s)
+
+# Homebrew (macOS or Linuxbrew)
+if has brew; then
+  # Clean up deprecated tap naming that sometimes lingers in configs
+  brew untap homebrew/homebrew-cask-fonts >/dev/null 2>&1 || true
+  brew tap homebrew/cask-fonts >/dev/null 2>&1 || true
+
+  if [ "$DEEP" -eq 1 ]; then
+    print_status "Homebrew: update-reset"
+    brew update-reset || true
+    print_status "Homebrew: outdated packages (informational)"
+    brew outdated || true
+  else
+    print_status "Homebrew: update"
+    brew update || true
+  fi
+
+  print_status "Homebrew: upgrading formulae"
+  brew upgrade || true
+
+  if [ "$uname_s" = "Darwin" ]; then
+    print_status "Homebrew: upgrading casks"
+    brew upgrade --cask || true
+  fi
+
+  print_status "Homebrew: cleanup"
+  brew cleanup || true
+
+  if [ "$DEEP" -eq 1 ]; then
+    print_status "Homebrew: doctor (informational)"
+    brew doctor || true
+  fi
+fi
+
+# Paru (Arch-based)
+if has paru; then
+  print_status "Paru: system sync and upgrade"
+  paru -Syu || true
+fi
+
+# apt (Debian/Ubuntu; avoid macOS where an unrelated 'apt' may exist)
+if [ "$uname_s" != "Darwin" ] && has apt; then
+  print_status "APT: full upgrade"
+  sudo apt update && sudo apt full-upgrade -y && sudo apt autoremove -y || true
+fi
+
+# Nix
+if has nix-env; then
+  print_status "Nix: upgrade user packages"
+  nix-env --upgrade || true
+fi
+
+if [ "$DEEP" -eq 1 ]; then
+  # LSP updates
+  print_status "Dev: updating LSPs"
+  if has update-lsp; then
+    update-lsp || true
+  else
+    echo "(skip) update-lsp not found"
+  fi
+
+  # Python packages
+  print_status "Dev: updating Python (pip)"
+  if has python3; then
+    python3 -m pip install --upgrade pip || true
+    req_file="$HOME/src/requirements.txt"
+    if [ -f "$req_file" ]; then
+      print_status "Dev: upgrading packages from $req_file"
+      python3 -m pip install --upgrade -r "$req_file" || true
+    else
+      echo "(skip) $HOME/src/requirements.txt not found"
+    fi
+  else
+    echo "(skip) python3 not found"
+  fi
+
+  # Neovim plugins (Lazy.nvim)
+  print_status "Dev: updating Neovim plugins"
+  if has nvim; then
+    if [ -d "$HOME/.local/share/nvim/lazy" ]; then
+      nvim --headless "+Lazy! sync" +qa || true
+    else
+      echo "(skip) Lazy.nvim not detected"
+    fi
+  else
+    echo "(skip) nvim not found"
+  fi
+fi
+
+print_status "All updates complete"

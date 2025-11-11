@@ -1,0 +1,29 @@
+# Cursor Rules for This Project
+
+## Skill-MCP Tool Usage
+
+When the user requests git operations, check if a skill exists first:
+
+1. **User asks about skills** → Use `list_skills` from skill-mcp
+2. **User asks to validate commits** → Use `run_skill_script("git-workflow", "scripts/rebase_check.py")`
+3. **User asks to list branches** → Use `run_skill_script("git-workflow", "scripts/branch_list.py", ["--json"])`
+4. **User asks for merge base** → Use `run_skill_script("git-workflow", "scripts/merge_base.py")`
+5. **User asks for fixup commit** → Use `run_skill_script("git-workflow", "scripts/commit_fixup.py")`
+
+**But:** For simple operations like `git status`, `git add`, `git commit`, use `run_terminal_cmd` directly.
+
+## Decision Process
+
+Before using git commands:
+1. Check if user's request matches a skill pattern
+2. If yes, check if skill exists with `list_skills`
+3. If skill exists and request matches skill's purpose, use `run_skill_script`
+4. If simple operation, use `run_terminal_cmd` directly
+
+## Skill Discovery
+
+When user asks about git workflows:
+- First check: `list_skills()` to see what's available
+- Read skill details: `get_skill_details("git-workflow")` to understand capabilities
+- Use skill if it matches the request pattern
+

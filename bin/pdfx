@@ -1,0 +1,152 @@
+#!/bin/bash
+
+set -euo pipefail
+
+print_usage() {
+  cat <<'USAGE'
+pdfx - extract text from PDFs with simple backends
+
+Usage:
+  pdfx [--engine ENGINE] [--layout] [--pages START:END] INPUT.pdf [OUTPUT.txt]
+
+Options:
+  --engine ENGINE   Backend to use: text (pdftotext), docling, ocr
+  --layout          Preserve layout (pdftotext -layout)
+  --pages A:B       Page range inclusive (1-based). Example: 1:10 or 5:5
+  -h, --help        Show this help
+
+Examples:
+  pdfx file.pdf
+  pdfx --layout file.pdf out.txt
+  pdfx --pages 3:7 file.pdf
+  pdfx --engine docling file.pdf out.md
+  pdfx --engine ocr file.pdf out.txt
+USAGE
+}
+
+ENGINE="text"
+LAYOUT=false
+PAGES=""
+
+ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --engine)
+      ENGINE="$2"; shift 2;;
+    --layout)
+      LAYOUT=true; shift;;
+    --pages)
+      PAGES="$2"; shift 2;;
+    -h|--help)
+      print_usage; exit 0;;
+    --)
+      shift; break;;
+    -*)
+      echo "Unknown option: $1" >&2; print_usage; exit 2;;
+    *)
+      ARGS+=("$1"); shift;;
+  esac
+done
+
+if [[ ${#ARGS[@]} -lt 1 || ${#ARGS[@]} -gt 2 ]]; then
+  print_usage; exit 2
+fi
+
+INPUT="${ARGS[0]}"
+OUTPUT="${ARGS[1]:-}"
+
+if [[ ! -f "$INPUT" ]]; then
+  echo "Input not found: $INPUT" >&2
+  exit 1
+fi
+
+case "$ENGINE" in
+  text)
+    if ! command -v pdftotext >/dev/null 2>&1; then
+      echo "pdftotext not found. Install with: brew install poppler" >&2
+      exit 127
+    fi
+    CMD=(pdftotext)
+    $LAYOUT && CMD+=("-layout")
+    if [[ -n "$PAGES" ]]; then
+      IFS=':' read -r PSTART PEND <<<"$PAGES"
+      [[ -n "$PSTART" ]] && CMD+=("-f" "$PSTART")
+      [[ -n "$PEND" ]] && CMD+=("-l" "$PEND")
+    fi
+    if [[ -n "$OUTPUT" ]]; then
+      CMD+=("$INPUT" "$OUTPUT")
+      "${CMD[@]}"
+    else
+      CMD+=("$INPUT" "-")
+      "${CMD[@]}"
+    fi
+    ;;
+  docling)
+    if ! command -v docling >/dev/null 2>&1; then
+      echo "docling not found. Install with: pipx install docling || pip install --user docling" >&2
+      exit 127
+    fi
+    # Prefer markdown output for readability unless explicit OUTPUT provided
+    OUTEXT="${OUTPUT##*.}"
+    if [[ -z "$OUTPUT" ]]; then
+      # stream markdown to stdout
+      docling --to md --pipeline vlm --vlm-model granite_docling "$INPUT"
+    else
+      case "$OUTEXT" in
+        md|markdown)
+          docling --to md --pipeline vlm --vlm-model granite_docling -o "$OUTPUT" "$INPUT"
+          ;;
+        html|htm)
+          docling --to html --pipeline vlm --vlm-model granite_docling -o "$OUTPUT" "$INPUT"
+          ;;
+        txt|text|*)
+          # produce md then strip to text
+          TMPMD="$(mktemp).md"
+          trap 'rm -f "$TMPMD"' EXIT
+          docling --to md --pipeline vlm --vlm-model granite_docling -o "$TMPMD" "$INPUT"
+          if command -v pandoc >/dev/null 2>&1; then
+            pandoc -f markdown -t plain "$TMPMD" -o "${OUTPUT:-/dev/stdout}"
+          else
+            sed 's/\x1B\[[0-9;]*[mK]//g' "$TMPMD" > "${OUTPUT:-/dev/stdout}"
+          fi
+          ;;
+      esac
+    fi
+    ;;
+  ocr)
+    if ! command -v ocrmypdf >/dev/null 2>&1; then
+      echo "ocrmypdf not found. Install with: brew install ocrmypdf || pipx install ocrmypdf" >&2
+      exit 127
+    fi
+    if ! command -v pdftotext >/dev/null 2>&1; then
+      echo "pdftotext not found. Install with: brew install poppler" >&2
+      exit 127
+    fi
+    # OCR to a temp PDF, then pdftotext
+    TMPPDF="$(mktemp).pdf"
+    trap 'rm -f "$TMPPDF"' EXIT
+    ocrmypdf --force-ocr "$INPUT" "$TMPPDF" >/dev/null
+    CMD=(pdftotext)
+    $LAYOUT && CMD+=("-layout")
+    if [[ -n "$PAGES" ]]; then
+      IFS=':' read -r PSTART PEND <<<"$PAGES"
+      [[ -n "$PSTART" ]] && CMD+=("-f" "$PSTART")
+      [[ -n "$PEND" ]] && CMD+=("-l" "$PEND")
+    fi
+    if [[ -n "$OUTPUT" ]]; then
+      CMD+=("$TMPPDF" "$OUTPUT")
+      "${CMD[@]}"
+    else
+      CMD+=("$TMPPDF" "-")
+      "${CMD[@]}"
+    fi
+    ;;
+  *)
+    echo "Unknown engine: $ENGINE" >&2
+    print_usage
+    exit 2
+    ;;
+esac
+
+
+

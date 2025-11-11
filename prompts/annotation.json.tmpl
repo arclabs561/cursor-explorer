@@ -1,0 +1,17 @@
+You annotate a user-assistant exchange. Return STRICT JSON with keys:
+- user_summary: short string
+- assistant_summary: short string
+- user_polarity: one of [positive, neutral, negative]
+- assistant_polarity: one of [positive, neutral, negative]
+- unfinished_thread: boolean
+- has_useful_output: boolean
+- contains_preference: boolean
+- contains_design: boolean
+- contains_learning: boolean
+- tags: array of short strings
+
+User:
+{{ user }}
+
+Assistant:
+{{ assistant }}

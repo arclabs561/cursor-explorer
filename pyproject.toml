@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-explorer"
+version = "0.2.0"
+description = "Agent-agnostic CLI for exploring AI agent chat data (Cursor, Cline, Aider, etc.)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+  { name = "Cursor Explorer" }
+]
+dependencies = [
+    "numpy>=2.0.2",
+    "toponymy>=0.3.0",
+    "umap-learn>=0.5.9.post2",
+]
+
+[project.optional-dependencies]
+llm = [
+  "openai>=1.50.0",
+]
+extras = [
+  "python-dotenv>=1.0.1",
+]
+dotenv = [
+  "python-dotenv>=1.0.1",
+]
+
+[project.scripts]
+agent-explorer = "cursor_explorer.cli:main"
+cursor-explorer = "cursor_explorer.cli:main"  # Backward compatibility alias
+cursor-chat-explorer = "cursor_explorer.cli:main"  # Backward compatibility alias
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["cursor_explorer"]
+py-modules = ["llm_helpers", "llm_cache"]
+
+[tool.uv]
+# Development-time tools
+dev-dependencies = [
+  "pytest>=8.3",
+  "pytest-cov>=4.1",
+  "pytest-xdist>=3.5",
+  "pytest-randomly>=3.15",
+  "pytest-sugar>=0.9.7",
+  "pytest-timeout>=2.3",
+  "ruff>=0.5",
+]
+
+[tool.ruff]
+line-length = 220
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["W191", "E501"]

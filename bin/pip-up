@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+"""
+Upgrade all installed pip packages.
+
+This script automates the process of upgrading all Python packages installed via pip.
+It checks the version of pip and uses the appropriate method to list and upgrade all installed packages.
+For pip versions below 10.0.1, it uses the pip module, and for pip versions 10.0.1 and above,
+it uses the pkg_resources module from setuptools.
+
+This approach avoids potential warnings and errors that may arise from using `pip freeze` directly,
+and it continues to the next package if an upgrade fails, rather than stopping the entire process.
+
+Reference:
+- Original Stack Overflow discussion: https://stackoverflow.com/questions/2720014/how-to-upgrade-all-python-packages-with-pip
+
+Usage:
+- Run this script as root on macOS or in environments where administrative privileges are required for package installations.
+- Ensure you have the appropriate version of pip and setuptools installed.
+
+Author: Adapted from Stack Overflow contributions by user515656 and MSS, among others.
+"""
+
+import subprocess
+
+try:
+    # For pip >= 10.0.1
+    import pkg_resources
+    packages = [dist.project_name for dist in pkg_resources.working_set]
+except ImportError:
+    # For pip < 10.0.1
+    import pip
+    packages = [dist.project_name for dist in pip.get_installed_distributions()]  # pyright:ignore
+
+packages = sorted(packages)
+
+print(f"about to upgrade {len(packages)} outdated packages: {packages!r}")
+print()
+command = "python3 -m pip install --upgrade " + ' '.join(packages)
+subprocess.call(command, shell=True)

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+# Delegate to primary updater in deep mode for muscle-memory compatibility
+exec "$(dirname "$0")/u" --deep "$@"

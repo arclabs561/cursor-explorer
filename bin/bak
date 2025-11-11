@@ -1,0 +1,48 @@
+#!/bin/sh
+
+set -ex
+
+if [ "$1" = "-s" ] || [ "$1" = "--size" ]; then
+  df -H /
+  sudo du -sch "$HOME"
+  exit 0
+fi
+
+dst=$1
+if [ -z "$dst" ]; then
+  echo "must set dst"
+  exit 1
+fi
+
+if command -v yay; then
+  yay -Qqe | sudo tee "$1/PACKAGES"
+else
+  echo 'yay not installed, AUR may be missed'
+  pacman -Qqe | sudo tee "$1/PACKAGES"
+fi
+
+date | sudo tee -a "$1/TIMESTAMP"
+cat "$0" | sudo tee "$1/SOURCE"
+
+cat > /tmp/exclude.txt <<EOF
+$HOME/nltk_data/
+$HOME/.cache/
+$HOME/go/pkg/mod/cache/
+$HOME/venv/
+$HOME/*node_modules
+$HOME/.cache
+EOF
+trap "rm /tmp/exclude.txt" EXIT
+
+sudo rsync \
+  --exclude-from=/tmp/exclude.txt \
+  --info=progress2 \
+  --recursive \
+  --archive \
+  --partial \
+  --append-verify \
+  --delete \
+  --one-file-system \
+  $HOME \
+  $dst
+

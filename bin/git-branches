@@ -1,0 +1,58 @@
+#!/bin/bash
+
+BLUE="$(tput setaf 4)"
+RED="$(tput setaf 1)"
+GREEN="$(tput setaf 2)"
+MAGENTA="$(tput setaf 5)"
+BOLD="$(tput bold)"
+DIM="$(tput dim)"
+NC="$(tput sgr0)"
+
+scale() {
+  # n=$(bc -l <<< "scale=0; l($2)/1")
+  n=1
+  printf -- "$1%.0s" $(seq 1 $n)
+  # echo ""
+}
+
+diffstat() {
+  branch="$1"
+  base=$(git merge-base $(git symbolic-ref refs/remotes/origin/HEAD --short)  "$branch")
+  com=$(git log --oneline "${base}..${branch}" | wc -l | xargs)
+  if [ "$com" == 0 ]; then
+    com=
+  fi
+  diff="$(git diff --shortstat "${base}..${branch}")"
+  chg="$(echo "$diff" | rg '(\d+) files? changed' -or '$1')"
+  ins="$(echo "$diff" | rg '(\d+) insertions?' -or '$1')"
+  del="$(echo "$diff" | rg '(\d+) deletions?' -or '$1')"
+  sep=" "
+  summary=""
+  [[ -z "$com" ]] || summary+="${MAGENTA}$(printf "%6s" $com"$(scale 'c' 1)")${NC}${sep}"
+  [[ -z "$chg" ]] || summary+="${BLUE}$(printf "%6s" $chg"$(scale 'f' 1)")${NC}${sep}"
+  [[ -z "$ins" ]] || summary+="${GREEN}$(printf "%6s" "$ins$(scale '+' 1)")${NC}${sep}"
+  [[ -z "$del" ]] || summary+="${RED}$(printf "%6s" "$del$(scale '-' 1)")${NC}"
+  echo "$summary"
+}
+
+lastactive() {
+  branch="$1"
+  echo "$DIM$(git log --abbrev-commit -1 --date=relative "$branch"  | rg 'Date:\s+(.*)' -or '$1')$NC"
+}
+
+curr_branch=$(git branch | rg '\*\s+(.*)' -or '$1')
+
+branches=$(git branch --sort=-committerdate | sed 's/\* //')
+if [ "$1" == "-" ]; then
+  branches=$curr_branch
+fi
+
+i=0
+for b in $branches; do
+  if [ "$b" == "$curr_branch" ]; then
+    echo "${i} $RED$BOLD${b}$NC%%$(lastactive "$b")%%$(diffstat "$b")" &
+  else
+    echo "${i} $NC$NC$b$NC%%$(lastactive "$b")%%$(diffstat "$b")" &
+  fi
+  (( i++ ))
+done | sort -nk1 | sed -E 's/^[0-9]+ +//g' | column -t -s'%%'

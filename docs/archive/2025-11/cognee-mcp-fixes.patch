@@ -1,0 +1,131 @@
+diff --git a/cognee-mcp/src/server.py b/cognee-mcp/src/server.py
+index ce6dad88..75502b0d 100755
+--- a/cognee-mcp/src/server.py
++++ b/cognee-mcp/src/server.py
+@@ -661,8 +661,29 @@ async def get_developer_rules() -> list:
+                 logger.warning("Developer rules retrieval is not available in API mode")
+                 return "Developer rules retrieval is not available in API mode"
+ 
+-            developer_rules = await get_existing_rules(rules_nodeset_name="coding_agent_rules")
+-            return developer_rules
++            try:
++                developer_rules = await get_existing_rules(rules_nodeset_name="coding_agent_rules")
++                # Ensure we return a string, not empty list or None
++                if developer_rules is None:
++                    return "No developer rules found. Use cognee_add_developer_rules to ingest rules from your project files."
++                if isinstance(developer_rules, list):
++                    # If it's a list, convert to string
++                    if len(developer_rules) == 0:
++                        return "No developer rules found. Use cognee_add_developer_rules to ingest rules from your project files."
++                    return "\n".join(f"- {rule}" if isinstance(rule, str) else str(rule) for rule in developer_rules)
++                if not developer_rules or (isinstance(developer_rules, str) and developer_rules.strip() == ""):
++                    return "No developer rules found. Use cognee_add_developer_rules to ingest rules from your project files."
++                return str(developer_rules)
++            except RuntimeError as e:
++                # Handle database lock errors
++                if "Could not set lock" in str(e) or "IO exception" in str(e):
++                    logger.warning(f"Database lock error (database may be in use): {str(e)}")
++                    return "Database is currently in use. Please try again in a moment. If the issue persists, ensure no other Cognee processes are running."
++                logger.error(f"Runtime error fetching developer rules: {str(e)}")
++                return f"Error retrieving developer rules: {str(e)}"
++            except Exception as e:
++                logger.error(f"Error fetching developer rules: {str(e)}")
++                return f"Error retrieving developer rules: {str(e)}"
+ 
+     rules_text = await fetch_rules_from_cognee()
+ 
+@@ -712,12 +733,21 @@ async def list_data(dataset_id: str = None) -> list:
+                         )
+                     ]
+ 
+-                from cognee.modules.users.methods import get_default_user
++                from cognee.modules.users.methods import get_default_user, get_user_by_email
+                 from cognee.modules.data.methods import get_dataset, get_dataset_data
++                from sqlalchemy.exc import IntegrityError
+ 
+                 logger.info(f"Listing data for dataset: {dataset_id}")
+                 dataset_uuid = UUID(dataset_id)
+-                user = await get_default_user()
++                try:
++                    user = await get_default_user()
++                except IntegrityError as e:
++                    # User already exists, try to get it instead
++                    if "UNIQUE constraint failed: users.email" in str(e) or "UserAlreadyExists" in str(e):
++                        logger.warning("Default user already exists, attempting to retrieve...")
++                        user = await get_user_by_email("default_user@example.com")
++                    else:
++                        raise
+ 
+                 dataset = await get_dataset(user.id, dataset_uuid)
+ 
+@@ -938,11 +968,35 @@ async def cognify_status():
+         try:
+             from cognee.modules.data.methods.get_unique_dataset_id import get_unique_dataset_id
+             from cognee.modules.users.methods import get_default_user
++            from sqlalchemy.exc import IntegrityError
++
++            try:
++                user = await get_default_user()
++            except IntegrityError as e:
++                # User already exists, try to get it instead
++                if "UNIQUE constraint failed: users.email" in str(e) or "UserAlreadyExists" in str(e):
++                    logger.warning("Default user already exists, attempting to retrieve...")
++                    # Try to get existing user - this might need a different approach
++                    # For now, log and continue - the user should exist
++                    from cognee.modules.users.methods import get_user_by_email
++                    try:
++                        user = await get_user_by_email("default_user@example.com")
++                    except Exception:
++                        # If we can't get user, return error
++                        error_msg = "❌ Unable to retrieve default user. Database may need migration."
++                        logger.error(error_msg)
++                        return [types.TextContent(type="text", text=error_msg)]
++                else:
++                    raise
+ 
+-            user = await get_default_user()
+             status = await cognee_client.get_pipeline_status(
+                 [await get_unique_dataset_id("main_dataset", user)], "cognify_pipeline"
+             )
++            
++            # Handle empty status
++            if not status or status == "{}" or status == "None":
++                return [types.TextContent(type="text", text="No cognify pipeline runs found. Use cognify tool to process data first.")]
++            
+             return [types.TextContent(type="text", text=str(status))]
+         except NotImplementedError:
+             error_msg = "❌ Pipeline status is not available in API mode"
+@@ -980,11 +1034,32 @@ async def codify_status():
+         try:
+             from cognee.modules.data.methods.get_unique_dataset_id import get_unique_dataset_id
+             from cognee.modules.users.methods import get_default_user
++            from sqlalchemy.exc import IntegrityError
++
++            try:
++                user = await get_default_user()
++            except IntegrityError as e:
++                # User already exists, try to get it instead
++                if "UNIQUE constraint failed: users.email" in str(e) or "UserAlreadyExists" in str(e):
++                    logger.warning("Default user already exists, attempting to retrieve...")
++                    from cognee.modules.users.methods import get_user_by_email
++                    try:
++                        user = await get_user_by_email("default_user@example.com")
++                    except Exception:
++                        error_msg = "❌ Unable to retrieve default user. Database may need migration."
++                        logger.error(error_msg)
++                        return [types.TextContent(type="text", text=error_msg)]
++                else:
++                    raise
+ 
+-            user = await get_default_user()
+             status = await cognee_client.get_pipeline_status(
+                 [await get_unique_dataset_id("codebase", user)], "cognify_code_pipeline"
+             )
++            
++            # Handle empty status
++            if not status or status == "{}" or status == "None":
++                return [types.TextContent(type="text", text="No codify pipeline runs found. Use codify tool to analyze a code repository first.")]
++            
+             return [types.TextContent(type="text", text=str(status))]
+         except NotImplementedError:
+             error_msg = "❌ Pipeline status is not available in API mode"

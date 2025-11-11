@@ -1,0 +1,214 @@
+# Skill-MCP Tool Usage Guidelines for AI Assistant
+
+## Tool Discovery
+
+I have access to skill-mcp tools via MCP:
+- `list_skills` - List all available skills
+- `get_skill_details` - Get comprehensive skill information
+- `read_skill_file` - Read files from skills
+- `run_skill_script` - Execute skill scripts
+- `read_skill_env` - Read environment variable keys
+- `update_skill_env` - Update environment variables
+
+## When to Use skill-mcp Tools
+
+### ✅ Use skill-mcp tools when:
+
+1. **User asks about skills**
+   - "What skills do we have?"
+   - "List available skills"
+   - "Show me the git-workflow skill"
+
+2. **User wants to use a skill**
+   - "Run the branch_list script"
+   - "Execute merge_base from git-workflow"
+   - "Use git-workflow to validate commits"
+
+3. **User wants to manage skills**
+   - "Create a new skill"
+   - "Add a script to git-workflow"
+   - "Update the git-workflow skill"
+
+4. **Composing workflows with skills**
+   - "Use git-workflow to check commits, then run tests"
+   - "List branches and then analyze them"
+
+### ❌ Don't use skill-mcp tools when:
+
+1. **Simple git operations**
+   - Use `run_terminal_cmd` for `git add`, `git commit`, `git push`
+   - Use `run_terminal_cmd` for `git status`, `git log`
+
+2. **Direct file operations**
+   - Use `read_file`/`write_file` for reading/writing files directly
+   - Use `run_terminal_cmd` for simple commands
+
+3. **One-off operations**
+   - If it's a single command, use `run_terminal_cmd` directly
+   - Don't create a skill just to run one command
+
+## Decision Tree
+
+```
+User request
+    │
+    ├─ About skills? → Use list_skills, get_skill_details
+    │
+    ├─ Run skill script? → Use run_skill_script
+    │
+    ├─ Manage skills? → Use skill-mcp CRUD tools
+    │
+    ├─ Simple git command? → Use run_terminal_cmd
+    │
+    └─ Complex workflow? → Consider skill-mcp if it composes operations
+```
+
+## Tool Usage Patterns
+
+### Pattern 1: Discovering Skills
+```python
+# When user asks "what skills do we have?"
+list_skills()  # Returns list of skills
+get_skill_details("git-workflow")  # Get full details
+```
+
+### Pattern 2: Running Skill Scripts
+```python
+# When user wants to run a script
+run_skill_script(
+    skill_name="git-workflow",
+    script_path="scripts/branch_list.py",
+    args=["--json", "-n", "5"]
+)
+```
+
+### Pattern 3: Reading Skill Files
+```python
+# When user wants to see skill code/docs
+read_skill_file(
+    skill_name="git-workflow",
+    file_path="scripts/merge_base.py"
+)
+```
+
+### Pattern 4: Composing Workflows
+```python
+# When user wants multi-step workflow
+# 1. List branches
+branches = run_skill_script("git-workflow", "scripts/branch_list.py", ["--json"])
+
+# 2. Find merge base for each
+for branch in branches:
+    merge_base = run_skill_script("git-workflow", "scripts/merge_base.py", [branch])
+    # Process results...
+```
+
+## Error Handling
+
+Always:
+1. Check if skill exists before using it
+2. Validate script paths exist
+3. Handle script execution errors gracefully
+4. Provide helpful error messages
+
+## Anti-Patterns to Avoid
+
+1. **Over-using skills for simple operations**
+   - ❌ Using `run_skill_script` for `git status`
+   - ✅ Use `run_terminal_cmd` for simple git commands
+
+2. **Creating skills unnecessarily**
+   - ❌ Creating a skill for a one-off operation
+   - ✅ Only create skills for repeated, composable patterns
+
+3. **Ignoring direct tool access**
+   - ❌ Always using skills even when direct access is better
+   - ✅ Use the right tool for the job
+
+4. **Not checking skill existence**
+   - ❌ Assuming a skill exists
+   - ✅ Always list skills first or check details
+
+## Examples
+
+### ✅ Correct: Using skill for workflow
+User: "Validate all commits in my branch using git-workflow"
+
+```python
+# 1. Check skill exists
+skills = list_skills()
+if "git-workflow" not in [s.name for s in skills]:
+    return "git-workflow skill not found"
+
+# 2. Run the validation script
+result = run_skill_script(
+    skill_name="git-workflow",
+    script_path="scripts/rebase_check.py",
+    args=["--start", "origin/main"]
+)
+
+# 3. Process results
+if result["success"]:
+    return f"All commits passed validation"
+else:
+    return f"Validation failed: {result['failed_commits']}"
+```
+
+### ❌ Incorrect: Using skill for simple operation
+User: "What's my current git branch?"
+
+```python
+# DON'T do this:
+run_skill_script("git-workflow", "scripts/branch_list.py", ["--json"])
+
+# DO this instead:
+run_terminal_cmd("git rev-parse --abbrev-ref HEAD")
+```
+
+### ✅ Correct: Composing skills
+User: "List branches and find merge base for each"
+
+```python
+# 1. List branches
+branches_result = run_skill_script(
+    "git-workflow", 
+    "scripts/branch_list.py", 
+    ["--json"]
+)
+
+# 2. For each branch, find merge base
+for branch in branches_result:
+    merge_base = run_skill_script(
+        "git-workflow",
+        "scripts/merge_base.py",
+        [branch["name"]]
+    )
+    # Process...
+```
+
+## Key Principles
+
+1. **Skills are for composition, not simple operations**
+2. **Always check skill existence before use**
+3. **Use direct tools when simpler**
+4. **Compose skills for complex workflows**
+5. **Handle errors gracefully**
+6. **Provide clear feedback to user**
+
+## Self-Check Before Using skill-mcp Tools
+
+Before using skill-mcp tools, ask:
+1. Is this about skills themselves? → Use skill-mcp tools
+2. Is this a simple operation? → Use direct tools
+3. Is this a composable workflow? → Consider skill-mcp
+4. Does the skill exist? → Check with list_skills first
+5. Will this benefit from skill composition? → Use skill-mcp
+
+## Remember
+
+- Skills are tools for **workflow composition**, not simple command execution
+- Use **direct tools** (`run_terminal_cmd`, `read_file`) for simple operations
+- Use **skill-mcp tools** for skill management and composed workflows
+- Always **validate** skill existence before use
+- **Compose** skills when building complex workflows
+

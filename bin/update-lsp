@@ -1,0 +1,36 @@
+#!/bin/bash
+
+set -ex
+
+# TODO: brewIn() { if brew ls --versions "$1"; then brew upgrade "$1"; else brew install "$1"; fi }
+
+up() {
+	if command -v brew >&/dev/null; then
+		brew upgrade "$@"
+	elif command -v paru >&/dev/null; then
+		paru -S --needed "$@"
+	fi
+}
+
+up \
+	lua-language-server\
+	gopls \
+	pyright \
+	rust-analyzer \
+	prettier
+
+npm update -g \
+	diagnostic-languageserver \
+	vscode-langservers-extracted \
+	yaml-language-server \
+	sql-language-server \
+	typescript typescript-language-server
+
+go install github.com/nametake/golangci-lint-langserver@latest
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+go install github.com/google/yamlfmt/cmd/yamlfmt@latest
+go install golang.org/x/tools/cmd/goimports@latest
+go install github.com/mgechev/revive@latest
+go install github.com/rogpeppe/gohack@latest
+go install golang.org/x/pkgsite/cmd/pkgsite@latest
+# go install github.com/rhysd/actionlint/cmd/actionlint@latest

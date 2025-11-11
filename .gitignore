@@ -1,0 +1,27 @@
+.env
+llm_usage.jsonl
+llm_cache.sqlite
+__pycache__/
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+
+cognee-storage/
+.cognee_cache/
+.cognee_system/
+
+# Generated data files
+data/
+*.db
+*.sqlite
+
+# Logs
+logs/
+*.log
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.cursor/rules/snyk_rules.mdc
+
+# Environment backup files
+.env.bak*
