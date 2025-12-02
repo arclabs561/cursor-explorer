@@ -1,5 +1,3 @@
-import os
-from pathlib import Path
 
 from cursor_explorer import prompts as promptmod
 from cursor_explorer import env as envmod

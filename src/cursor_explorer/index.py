@@ -31,14 +31,14 @@ def _load_sqlite_vec(conn) -> None:
 			f"sqlite-vec package loaded but failed to initialize: {e}\n"
 			"Try: pip install sqlite-vec or uv pip install sqlite-vec"
 		) from e
-	
+
 	# Fallback to extension names
 	try:
 		conn.load_extension("vec0")
 		return
 	except Exception:
 		pass
-	
+
 	try:
 		conn.load_extension("sqlite-vec")
 		return
@@ -162,7 +162,6 @@ def build_embeddings_sqlite(db_path: str, index_path: str, table: str = "vec_ind
 	import sqlite3
 	import array
 	import re
-	import sys
 	import time
 
 	# Validate table name to avoid SQL injection in DDL/DML
@@ -499,7 +498,6 @@ def build_embeddings_sqlite_from_items(
 	import sqlite3
 	import array
 	import re
-	import sys
 	import time
 
 	if not re.fullmatch(r"[A-Za-z0-9_]+", items_table or ""):

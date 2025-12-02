@@ -41,3 +41,13 @@ cognee/
 # Temporary/duplicate files
 * 2.py
 * 2.*
+
+# Coverage reports
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Temporary exploration files
+EXPLORATION_FINDINGS.md
+TIDY_AND_TEST_REPORT.md

@@ -13,7 +13,7 @@ class AgentBackend(ABC):
     - Table names
     - Agent identifier
     """
-    
+
     @abstractmethod
     def get_db_path(self, env_override: Optional[str] = None) -> str:
         """Return path to agent's state database.
@@ -25,7 +25,7 @@ class AgentBackend(ABC):
             Absolute path to SQLite database file
         """
         pass
-    
+
     @abstractmethod
     def get_table_name(self) -> str:
         """Return name of key-value storage table.
@@ -34,7 +34,7 @@ class AgentBackend(ABC):
             Table name (e.g., 'cursorDiskKV', 'clineDiskKV')
         """
         pass
-    
+
     @abstractmethod
     def get_agent_name(self) -> str:
         """Return agent identifier.
@@ -43,7 +43,7 @@ class AgentBackend(ABC):
             Agent name (e.g., 'cursor', 'cline')
         """
         pass
-    
+
     def get_env_var_name(self) -> str:
         """Return environment variable name for database path override.
         
@@ -51,7 +51,7 @@ class AgentBackend(ABC):
             Env var name (e.g., 'CURSOR_STATE_DB', 'CLINE_STATE_DB')
         """
         return f"{self.get_agent_name().upper()}_STATE_DB"
-    
+
     def expand_path(self, path: str) -> str:
         """Expand user and environment variables in path.
         

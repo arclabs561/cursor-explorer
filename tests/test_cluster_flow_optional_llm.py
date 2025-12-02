@@ -27,7 +27,7 @@ def test_cluster_index_and_summarize_without_llm(tmp_path):
 			f.write(json.dumps(r) + "\n")
 	# Build a small binary cluster tree using the simple method (no EVOC, no LLM)
 	tree_path = tmp_path / "tree.json"
-	proc = run_cli(["cluster-index", str(idx), str(tree_path), "--depth", "2", "--min-size", "1", "--limit", "3"]) 
+	proc = run_cli(["cluster-index", str(idx), str(tree_path), "--depth", "2", "--min-size", "1", "--limit", "3"])
 	assert proc.returncode == 0
 	data = json.loads(proc.stdout)
 	assert data.get("meta", {}).get("count", 0) == 3

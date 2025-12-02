@@ -5,7 +5,6 @@ import os
 import hashlib
 from typing import Dict, List, Optional, Any
 from cursor_explorer import trace as tracemod
-from cursor_explorer import env as envmod
 
 try:
 	from openai import OpenAI  # type: ignore

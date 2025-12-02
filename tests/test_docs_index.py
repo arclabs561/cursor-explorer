@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 
 from cursor_explorer import docs as docmod

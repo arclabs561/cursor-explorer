@@ -6,12 +6,10 @@ import json
 import os
 import sys
 import hashlib
-import sqlite3
 from typing import Dict, List, Optional, Any, Tuple
 
-from .paths import expand_abs, default_db_path
+from .paths import expand_abs
 from . import index as indexmod
-from . import db as dbmod
 import llm_utils as llmmod
 import llm_cache
 
@@ -31,7 +29,7 @@ def _cache_key(prefix: str, *args, **kwargs) -> str:
 		else:
 			# Limit length to prevent extremely long cache keys
 			normalized_args.append(str(arg).strip()[:1000])
-	
+
 	normalized_kwargs = []
 	for k, v in sorted(kwargs.items()):
 		if isinstance(v, (list, tuple)):
@@ -40,7 +38,7 @@ def _cache_key(prefix: str, *args, **kwargs) -> str:
 			normalized_kwargs.append(f"{k}=None")
 		else:
 			normalized_kwargs.append(f"{k}={str(v).strip()[:1000]}")
-	
+
 	parts = [prefix] + normalized_args + normalized_kwargs
 	key_str = "|".join(parts)
 	return hashlib.sha256(key_str.encode()).hexdigest()
@@ -57,18 +55,28 @@ def _is_index_stale(index_path: str, db_path: Optional[str] = None) -> bool:
 	"""Check if index is stale compared to source DB.
 	
 	Returns True if index doesn't exist or is older than source DB.
+	Handles file system errors gracefully.
 	"""
 	if not os.path.exists(index_path):
 		return True
-	
-	index_mtime = os.path.getmtime(index_path)
-	
+
+	try:
+		index_mtime = os.path.getmtime(index_path)
+	except OSError:
+		# File may have been deleted or is inaccessible
+		return True
+
 	# Check if source DB is newer
 	if db_path and os.path.exists(db_path):
-		db_mtime = os.path.getmtime(db_path)
-		if db_mtime > index_mtime:
-			return True
-	
+		try:
+			db_mtime = os.path.getmtime(db_path)
+			# Add small tolerance (1 second) for clock skew and file system precision
+			if db_mtime > (index_mtime + 1.0):
+				return True
+		except OSError:
+			# DB may be inaccessible, assume index is not stale
+			pass
+
 	return False
 
 
@@ -86,14 +94,14 @@ def ensure_indexed(
 	# Default paths
 	default_index = expand_abs(os.getenv("CURSOR_INDEX_JSONL", "./cursor_index.jsonl"))
 	default_vec_db = expand_abs(os.getenv("CURSOR_VEC_DB", "./cursor_vec.db"))
-	
+
 	index_path = expand_abs(index_jsonl) if index_jsonl else default_index
 	vec_path = expand_abs(vec_db) if vec_db else default_vec_db
-	
+
 	# Check if index exists and is up-to-date
 	index_exists = os.path.exists(index_path) and os.path.getsize(index_path) > 0
 	index_stale = _is_index_stale(index_path, db_path) if index_exists else True
-	
+
 	# Create JSONL index if needed (idempotent: only rebuild if stale or forced)
 	if not index_exists or index_stale or force:
 		if os.getenv("CURSOR_VERBOSE"):
@@ -105,7 +113,7 @@ def ensure_indexed(
 			max_turns_per=None,
 		)
 		index_exists = count > 0
-	
+
 	# Check if vec DB exists and is up-to-date with index
 	vec_exists = os.path.exists(vec_path) and os.path.getsize(vec_path) > 0
 	vec_stale = False
@@ -115,7 +123,7 @@ def ensure_indexed(
 		index_mtime = _get_index_mtime(index_path)
 		if index_mtime and index_mtime > vec_mtime:
 			vec_stale = True
-	
+
 	# Create vec DB if needed (idempotent: only rebuild if stale or forced)
 	if index_exists and (not vec_exists or vec_stale or force):
 		try:
@@ -134,7 +142,7 @@ def ensure_indexed(
 			if os.getenv("CURSOR_VERBOSE"):
 				print(f"Vector DB creation skipped: {e}", file=sys.stderr)
 			pass
-	
+
 	return {
 		"index_jsonl": index_path if index_exists else None,
 		"vec_db": vec_path if vec_exists else None,
@@ -165,13 +173,13 @@ def find_solution(
 		indexes = ensure_indexed(index_jsonl, vec_db, db_path)
 		index_jsonl = indexes.get("index_jsonl")
 		vec_db = indexes.get("vec_db")
-	
+
 	if not index_jsonl or not os.path.exists(index_jsonl):
 		return {"error": "Index not found. Run 'index' command first or set auto_index=True."}
-	
+
 	# Normalize query for caching and search (strip whitespace, limit length)
 	query_normalized = query.strip()[:1000]  # Limit to 1000 chars for cache key
-	
+
 	# Check cache for search results (cache key includes query, k, and index mtime)
 	cache_key = None
 	cache_hit = False
@@ -186,7 +194,7 @@ def find_solution(
 				return result
 			except Exception:
 				pass
-	
+
 	# Try vector search first (if available) - fastest and most accurate
 	results: List[Dict] = []
 	if vec_db and os.path.exists(vec_db):
@@ -197,7 +205,7 @@ def find_solution(
 			if os.getenv("CURSOR_VERBOSE"):
 				print(f"Vector search failed: {e}, falling back to sparse", file=sys.stderr)
 			pass
-	
+
 	# Fall back to sparse search if vector search failed or not available
 	if not results:
 		# Use SQLite items table if available - faster than JSONL
@@ -209,21 +217,24 @@ def find_solution(
 				if os.getenv("CURSOR_VERBOSE"):
 					print(f"SQLite search failed: {e}, falling back to JSONL", file=sys.stderr)
 				pass
-		
+
 		# Last resort: search JSONL directly - slowest but always works
 		# Optimize: streaming approach to avoid loading entire file into memory
 		if not results:
 			try:
 				from . import rag as ragmod
 				_score = ragmod._score
-				from typing import Tuple
-				
+
 				# Use streaming approach for large files - process line by line
 				# Keep only top candidates in memory to avoid memory issues
 				best_results: List[Tuple[float, Dict]] = []  # (score, item)
-				
+
 				with open(index_jsonl, "r", encoding="utf-8") as f:
-					for line in f:
+					malformed_count = 0
+					for line_num, line in enumerate(f, 1):
+						line = line.strip()
+						if not line:  # Skip empty lines
+							continue
 						try:
 							obj = json.loads(line)
 							# Build searchable text
@@ -232,7 +243,7 @@ def find_solution(
 							text = (user + "\n" + assistant).strip()
 							if not text:
 								continue
-							
+
 							# Quick score check - only keep top candidates
 							score = _score(query_normalized, text)
 							# Light boost for tags (same as search_items)
@@ -241,16 +252,23 @@ def find_solution(
 							for t in tags:
 								if t and t.lower() in query_normalized.lower():
 									score += 2
-							
+
 							if score > 0:
 								best_results.append((score, obj))
 								# Keep only top k*2 candidates during scan to limit memory
 								if len(best_results) > k * 2:
 									best_results.sort(key=lambda x: x[0], reverse=True)
 									best_results = best_results[:k * 2]
-						except Exception:
+						except json.JSONDecodeError:
+							malformed_count += 1
+							# Log first few malformed lines for debugging
+							if malformed_count <= 3 and os.getenv("CURSOR_VERBOSE"):
+								print(f"Warning: Malformed JSON at line {line_num} in {index_jsonl}", file=sys.stderr)
 							continue
-				
+						except Exception:
+							# Skip other errors (e.g., attribute errors)
+							continue
+
 				# Sort and return top k
 				best_results.sort(key=lambda x: x[0], reverse=True)
 				results = [item for score, item in best_results[:k]]
@@ -258,7 +276,7 @@ def find_solution(
 				if os.getenv("CURSOR_VERBOSE"):
 					print(f"JSONL search failed: {e}", file=sys.stderr)
 				pass
-	
+
 	# Enrich results with conversation context (limit to k to avoid unnecessary processing)
 	enriched = []
 	seen = set()  # Deduplicate by (composer_id, turn_index)
@@ -293,7 +311,7 @@ def find_solution(
 				"score": r.get("score") or r.get("distance"),
 				"match_type": match_type,
 			})
-	
+
 	result = {
 		"query": query,
 		"results": enriched,
@@ -303,11 +321,11 @@ def find_solution(
 		"cache_hit": cache_hit,
 		"match_type": overall_match_type,  # Overall match type (vector/sparse)
 	}
-	
+
 	# Cache the result
 	if use_cache and cache_key and not cache_hit:
 		llm_cache.set(cache_key, json.dumps(result, ensure_ascii=False))
-	
+
 	return result
 
 
@@ -328,10 +346,10 @@ def remember(
 	"""
 	# Find relevant conversations (use cache for search)
 	solution_results = find_solution(query, index_jsonl, vec_db, db_path, k=k*2, auto_index=auto_index, use_cache=True)
-	
+
 	if "error" in solution_results:
 		return solution_results
-	
+
 	results = solution_results.get("results", [])
 	if not results:
 		return {
@@ -339,7 +357,7 @@ def remember(
 			"message": "No relevant conversations found.",
 			"results": [],
 		}
-	
+
 	# If LLM available, generate a memory summary (cached)
 	memory_summary = None
 	memory_cache_hit = False
@@ -349,7 +367,7 @@ def remember(
 		# Sort result IDs for consistent cache keys
 		result_ids = sorted([f"{r.get('composer_id')}:{r.get('turn_index')}" for r in results[:5]])
 		cache_key = _cache_key("remember", query_normalized, model or "default", *result_ids)
-		
+
 		# Try cache first
 		cached = llm_cache.get(cache_key)
 		if cached:
@@ -358,13 +376,13 @@ def remember(
 				memory_cache_hit = True
 			except Exception:
 				pass
-		
+
 		# Generate if not cached
 		if not memory_summary:
 			try:
 				client = llmmod.require_client()
 				model = model or os.getenv("OPENAI_SMALL_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
-				
+
 				# Build context from top results (limit context size to avoid token limits)
 				context_parts = []
 				total_length = 0
@@ -378,7 +396,7 @@ def remember(
 					context_parts.append(part)
 					total_length += len(part)
 				context = "\n\n".join(context_parts)
-				
+
 				prompt = f"""You discussed the following topic in past conversations. Help recall what was discussed:
 
 Topic: {query}
@@ -387,7 +405,7 @@ Relevant conversation excerpts:
 {context}
 
 Provide a concise summary of what was discussed, key points, and any decisions made. Format as JSON with keys: summary, key_points (array), decisions (array), related_topics (array)."""
-				
+
 				# Handle different client types (OpenAI, Anthropic, etc.)
 				if hasattr(client, "chat") and hasattr(client.chat, "completions"):
 					# OpenAI/Groq/OpenRouter style
@@ -432,14 +450,14 @@ Provide a concise summary of what was discussed, key points, and any decisions m
 				else:
 					# Fallback for other client types
 					text = "{}"
-				
+
 				try:
 					memory_summary = json.loads(text)
 				except Exception:
 					memory_summary = {"raw": text}
 			except Exception as e:
 				memory_summary = {"error": str(e)}
-	
+
 	return {
 		"query": query,
 		"results": results[:k],
@@ -473,10 +491,10 @@ def find_design_plans(
 		"design pattern",
 		"system design",
 	]
-	
+
 	if topics:
 		design_queries.extend([f"{topic} design" for topic in topics])
-	
+
 	# Find all design-related conversations (use cache for individual queries)
 	# Deduplicate queries to avoid redundant searches
 	unique_queries = list(dict.fromkeys(design_queries))  # Preserves order, removes duplicates
@@ -489,7 +507,7 @@ def find_design_plans(
 				cid = r.get("composer_id")
 				if cid:
 					all_results.setdefault(cid, []).append(r)
-	
+
 	# Deduplicate and organize by conversation (more efficient deduplication)
 	organized: List[Dict] = []
 	for cid, results in all_results.items():
@@ -506,10 +524,10 @@ def find_design_plans(
 				"design_mentions": len(turns),
 				"turns": turns,
 			})
-	
+
 	# Sort by number of design mentions
 	organized.sort(key=lambda x: x["design_mentions"], reverse=True)
-	
+
 	# If LLM available, generate coherence summary (cached)
 	coherence_summary = None
 	coherence_cache_hit = False
@@ -518,7 +536,7 @@ def find_design_plans(
 		topics_normalized = sorted([str(t).strip()[:100] for t in (topics or [])])  # Sort for consistency
 		conv_ids = sorted([c.get("composer_id") for c in organized[:10]])  # Sort for consistency
 		cache_key = _cache_key("design-coherence", model or "default", *topics_normalized, *conv_ids)
-		
+
 		# Try cache first
 		cached = llm_cache.get(cache_key)
 		if cached:
@@ -527,13 +545,13 @@ def find_design_plans(
 				coherence_cache_hit = True
 			except Exception:
 				pass
-		
+
 		# Generate if not cached
 		if not coherence_summary:
 			try:
 				client = llmmod.require_client()
 				model = model or os.getenv("OPENAI_SMALL_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
-				
+
 				# Build context from top conversations (limit context size to avoid token limits)
 				context_parts = []
 				total_length = 0
@@ -548,9 +566,9 @@ def find_design_plans(
 						break
 					context_parts.append(part)
 					total_length += len(part)
-				
+
 				context = "\n\n---\n\n".join(context_parts)
-				
+
 				prompt = f"""You found scattered design plans and wants across multiple conversations. Organize them into a coherent design document.
 
 Design-related conversations:
@@ -564,7 +582,7 @@ Extract and organize:
 5. Potential conflicts or contradictions
 
 Format as JSON with keys: themes (array), plans (array of {{topic, description, conversations}}), decisions (array), wants (array), conflicts (array)."""
-				
+
 				if hasattr(client, "chat") and hasattr(client.chat, "completions"):
 					resp = client.chat.completions.create(
 						model=model,
@@ -586,14 +604,14 @@ Format as JSON with keys: themes (array), plans (array of {{topic, description, 
 					)
 				else:
 					text = "{}"
-				
+
 				try:
 					coherence_summary = json.loads(text)
 				except Exception:
 					coherence_summary = {"raw": text}
 			except Exception as e:
 				coherence_summary = {"error": str(e)}
-	
+
 	return {
 		"conversations": organized,
 		"total_conversations": len(organized),

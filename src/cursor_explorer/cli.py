@@ -73,7 +73,7 @@ def cmd_info(args: argparse.Namespace) -> int:
 	agent_type = getattr(args, 'agent', None)
 	db_path = expand_abs(args.db or default_db_path(agent_type=agent_type))
 	table_name = _get_table_name(args)
-	
+
 	print(f"DB: {db_path}")
 	if not os.path.exists(db_path):
 		print("Exists: no")
@@ -109,7 +109,7 @@ def cmd_keys(args: argparse.Namespace) -> int:
 	agent_type = getattr(args, 'agent', None)
 	db_path = expand_abs(args.db or default_db_path(agent_type=agent_type))
 	table_name = _get_table_name(args)
-	
+
 	conn = dbmod.connect_readonly(db_path)
 	if not dbmod.has_table(conn, table_name):
 		print(f"{table_name} not found")
@@ -592,7 +592,7 @@ def build_parser() -> argparse.ArgumentParser:
 	sp.set_defaults(func=cmd_keys)
 
 	sp = sub.add_parser("search", parents=[parent], help="Search keys/values in agent key-value table")
-	sp.add_argument("--key-like", help="Key LIKE pattern (e.g. %foo%)")
+	sp.add_argument("--key-like", help="Key LIKE pattern (e.g. %%foo%%)")
 	sp.add_argument("--contains", help="Substring to search in values")
 	sp.add_argument("--limit", type=int, default=50)
 	sp.set_defaults(func=cmd_search)
@@ -973,18 +973,18 @@ def build_parser() -> argparse.ArgumentParser:
 				comprehensive_check, comprehensive_analytics,
 				RaptorTree, SummaryLevel
 			)
-			
+
 			# Load tree
 			with open(expand_abs(a.tree_json), "r", encoding="utf-8") as f:
 				tree_data = json.load(f)
-			
-			# Reconstruct tree
-			levels = [
-				SummaryLevel(level=l["level"], items=l["items"])
-				for l in tree_data.get("levels", [])
-			]
+
+		# Reconstruct tree
+		levels = [
+			SummaryLevel(level=level_data["level"], items=level_data["items"])
+			for level_data in tree_data.get("levels", [])
+		]
 			tree = RaptorTree(levels=levels, meta=tree_data.get("meta", {}))
-			
+
 			# Load original items if provided
 			original_items = None
 			if a.original_items:
@@ -993,14 +993,14 @@ def build_parser() -> argparse.ArgumentParser:
 					for line in f:
 						if line.strip():
 							original_items.append(json.loads(line))
-			
+
 			# Get comprehensive stats
 			result = comprehensive_check(tree, original_items=original_items, include_eval=True)
-			
+
 			# Add analytics
 			analytics = comprehensive_analytics(tree)
 			result["analytics"] = analytics
-			
+
 			print(json.dumps(result, ensure_ascii=False, indent=2))
 			return 0
 		except FileNotFoundError as e:
@@ -1023,10 +1023,10 @@ def build_parser() -> argparse.ArgumentParser:
 		try:
 			import json
 			from multiscale import quick_check, comprehensive_check, load_tree
-			
+
 			# Load tree
 			tree = load_tree(expand_abs(a.tree_json))
-			
+
 			# Load original items if provided
 			original_items = None
 			if a.original_items:
@@ -1035,14 +1035,14 @@ def build_parser() -> argparse.ArgumentParser:
 					for line in f:
 						if line.strip():
 							original_items.append(json.loads(line))
-			
+
 			# Run check
 			if a.full:
 				result = comprehensive_check(tree, original_items=original_items, include_eval=True)
 			else:
 				health = quick_check(tree, original_items=original_items)
 				result = {"health": health.to_dict()}
-			
+
 			print(json.dumps(result, ensure_ascii=False, indent=2))
 			# Return non-zero if unhealthy
 			if "health" in result:
@@ -1068,18 +1068,18 @@ def build_parser() -> argparse.ArgumentParser:
 		try:
 			import json
 			from multiscale import validate, RaptorTree, SummaryLevel
-			
+
 			# Load tree
 			with open(expand_abs(a.tree_json), "r", encoding="utf-8") as f:
 				tree_data = json.load(f)
-			
-			# Reconstruct tree
-			levels = [
-				SummaryLevel(level=l["level"], items=l["items"])
-				for l in tree_data.get("levels", [])
-			]
+
+		# Reconstruct tree
+		levels = [
+			SummaryLevel(level=level_data["level"], items=level_data["items"])
+			for level_data in tree_data.get("levels", [])
+		]
 			tree = RaptorTree(levels=levels, meta=tree_data.get("meta", {}))
-			
+
 			# Load original items if provided
 			original_items = None
 			if a.original_items:
@@ -1088,10 +1088,10 @@ def build_parser() -> argparse.ArgumentParser:
 					for line in f:
 						if line.strip():
 							original_items.append(json.loads(line))
-			
+
 			# Validate
 			report = validate(tree, original_items=original_items, strict=a.strict)
-			
+
 			print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
 			return 0 if report.valid else 1
 		except FileNotFoundError as e:
@@ -1112,10 +1112,10 @@ def build_parser() -> argparse.ArgumentParser:
 		try:
 			import json
 			from multiscale import comprehensive_analytics, load_tree
-			
+
 			tree = load_tree(expand_abs(a.tree_json))
 			analytics = comprehensive_analytics(tree)
-			
+
 			print(json.dumps(analytics, ensure_ascii=False, indent=2))
 			return 0
 		except FileNotFoundError as e:
@@ -1137,11 +1137,11 @@ def build_parser() -> argparse.ArgumentParser:
 	def _cmd_multiscale_eval(a: argparse.Namespace) -> int:
 		try:
 			import json
-			from multiscale import evaluate, load_tree, RaptorTree, SummaryLevel
-			
+			from multiscale import evaluate, load_tree
+
 			# Load tree
 			tree = load_tree(expand_abs(a.tree_json))
-			
+
 			# Load original items if provided
 			original_items = None
 			if a.original_items:
@@ -1150,10 +1150,10 @@ def build_parser() -> argparse.ArgumentParser:
 					for line in f:
 						if line.strip():
 							original_items.append(json.loads(line))
-			
+
 			model = a.model or "gpt-4o-mini"
 			report = evaluate(original_items, tree, model=model)
-			
+
 			print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
 			return 0
 		except FileNotFoundError as e:
@@ -1182,23 +1182,23 @@ def build_parser() -> argparse.ArgumentParser:
 				load_tree, get_tree_stats, get_root_summary,
 				get_summary_at_level, search_tree, format_tree_summary
 			)
-			
+
 			# Load tree
 			tree = load_tree(expand_abs(a.tree_json))
-			
+
 			result = {}
-			
+
 			if a.stats:
 				result["stats"] = get_tree_stats(tree)
-			
+
 			if a.root:
 				summary = get_root_summary(tree)
 				result["root_summary"] = summary
-			
+
 			if a.level is not None:
 				summary = get_summary_at_level(tree, a.level)
 				result[f"level_{a.level}_summary"] = summary
-			
+
 			if a.search:
 				matches = search_tree(tree, a.search)
 				result["search_results"] = {
@@ -1206,14 +1206,14 @@ def build_parser() -> argparse.ArgumentParser:
 					"count": len(matches),
 					"matches": matches[:10],  # Limit to 10
 				}
-			
+
 			if a.format:
 				result["formatted"] = format_tree_summary(tree)
-			
+
 			# If no specific action, show stats
 			if not any([a.stats, a.root, a.level is not None, a.search, a.format]):
 				result["stats"] = get_tree_stats(tree)
-			
+
 			print(json.dumps(result, ensure_ascii=False, indent=2))
 			return 0
 		except FileNotFoundError as e:
@@ -1244,7 +1244,7 @@ def build_parser() -> argparse.ArgumentParser:
 		auto_index=not a.no_auto_index,
 		use_cache=not a.no_cache,
 	), ensure_ascii=False, indent=2)))
-	
+
 	sp = sub.add_parser("remember", parents=[parent], help="Help recall forgotten things from chat history (cached)")
 	sp.add_argument("query", help="What are you trying to remember?")
 	sp.add_argument("--index-jsonl", help="Path to index JSONL (defaults to CURSOR_INDEX_JSONL or ./cursor_index.jsonl)")
@@ -1263,7 +1263,7 @@ def build_parser() -> argparse.ArgumentParser:
 		use_llm=not a.no_llm,
 		model=a.model,
 	), ensure_ascii=False, indent=2)))
-	
+
 	sp = sub.add_parser("design-coherence", parents=[parent], help="Find and organize scattered design plans/wants (cached)")
 	sp.add_argument("--index-jsonl", help="Path to index JSONL (defaults to CURSOR_INDEX_JSONL or ./cursor_index.jsonl)")
 	sp.add_argument("--vec-db", help="Path to vector DB (defaults to CURSOR_VEC_DB or ./cursor_vec.db)")
@@ -1280,7 +1280,7 @@ def build_parser() -> argparse.ArgumentParser:
 		use_llm=not a.no_llm,
 		model=a.model,
 	), ensure_ascii=False, indent=2)))
-	
+
 	sp = sub.add_parser("ensure-indexed", parents=[parent], help="Ensure indexes exist, creating them if needed (idempotent)")
 	sp.add_argument("--index-jsonl", help="Path to index JSONL (defaults to CURSOR_INDEX_JSONL or ./cursor_index.jsonl)")
 	sp.add_argument("--vec-db", help="Path to vector DB (defaults to CURSOR_VEC_DB or ./cursor_vec.db)")
@@ -1291,13 +1291,13 @@ def build_parser() -> argparse.ArgumentParser:
 		db_path=a.db,
 		force=a.force,
 	), ensure_ascii=False, indent=2)))
-	
+
 	sp = sub.add_parser("cache-stats", parents=[parent], help="Show cache statistics")
 	sp.set_defaults(func=lambda a: print(json.dumps({
 		"cache_count": llm_cache.count(),
 		"cache_path": os.getenv("LLM_CACHE_PATH", "llm_cache.sqlite"),
 	}, ensure_ascii=False, indent=2)))
-	
+
 	sp = sub.add_parser("cache-clear", parents=[parent], help="Clear LLM cache")
 	sp.set_defaults(func=lambda a: (llm_cache.clear(), print(json.dumps({"cleared": True}, ensure_ascii=False))))
 

@@ -22,8 +22,8 @@ def get_backend(agent_type: str = None) -> AgentBackend:
     """
     import os
     agent_type = agent_type or os.getenv("AGENT_TYPE", "cursor")
-    
+
     if agent_type not in BACKENDS:
         raise ValueError(f"Unknown agent type: {agent_type}. Available: {list(BACKENDS.keys())}")
-    
+
     return BACKENDS[agent_type]()

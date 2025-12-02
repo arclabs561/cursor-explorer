@@ -71,7 +71,7 @@ def view_scale(
 		# Use level as depth, with minimum depth of 1
 		recursive_depth = depth if depth is not None else max(1, level - 2)  # level 3 -> depth 1, level 4 -> depth 2, etc.
 		result = _view_level_recursive(index_jsonl, recursive_depth, model, fanout)
-		
+
 		# Save tree if requested
 		if save_tree:
 			try:
@@ -86,7 +86,7 @@ def view_scale(
 				result["saved_tree"] = save_path
 			except Exception as e:
 				result["save_error"] = str(e)
-		
+
 		return result
 
 
@@ -95,7 +95,7 @@ def _view_level_0(composer_id: str, db_path: Optional[str] = None) -> Dict[str, 
 	conn = dbmod.connect_readonly(expand_abs(db_path or default_db_path()))
 	messages = parsermod.reconstruct_conversation(conn, composer_id)
 	pairs = parsermod.build_qa_pairs(messages)
-	
+
 	return {
 		"level": 0,
 		"composer_id": composer_id,
@@ -116,17 +116,17 @@ def _view_level_1(composer_id: str, model: Optional[str] = None, db_path: Option
 	conn = dbmod.connect_readonly(expand_abs(db_path or default_db_path()))
 	messages = parsermod.reconstruct_conversation(conn, composer_id)
 	pairs = parsermod.build_qa_pairs(messages)
-	
+
 	# Heuristic scales
 	heuristic = annotatemod.annotate_conversation_scales(pairs)
-	
+
 	result: Dict[str, Any] = {
 		"level": 1,
 		"composer_id": composer_id,
 		"heuristic": heuristic,
 		"turn_count": len(pairs),
 	}
-	
+
 	# LLM-based summary if model provided
 	if model:
 		try:
@@ -135,7 +135,7 @@ def _view_level_1(composer_id: str, model: Optional[str] = None, db_path: Option
 			result["llm"] = llm_summary
 		except Exception as e:
 			result["llm_error"] = str(e)
-	
+
 	return result
 
 
@@ -143,7 +143,7 @@ def _view_level_2(index_jsonl: str, model: Optional[str] = None) -> Dict[str, An
 	"""Level 2: Corpus-level summary across all conversations."""
 	index_path = expand_abs(index_jsonl)
 	conversations: Dict[str, List[Dict]] = {}
-	
+
 	# Group by composer_id
 	with open(index_path, "r", encoding="utf-8") as f:
 		for line in f:
@@ -154,7 +154,7 @@ def _view_level_2(index_jsonl: str, model: Optional[str] = None) -> Dict[str, An
 					conversations.setdefault(cid, []).append(item)
 			except Exception:
 				continue
-	
+
 	# Build corpus-level summary
 	corpus_data = {
 		"level": 2,
@@ -162,7 +162,7 @@ def _view_level_2(index_jsonl: str, model: Optional[str] = None) -> Dict[str, An
 		"total_turns": sum(len(items) for items in conversations.values()),
 		"conversations": {},
 	}
-	
+
 	# Per-conversation summaries (heuristic)
 	for cid, items in list(conversations.items())[:50]:  # Limit for performance
 		pairs = []
@@ -178,7 +178,7 @@ def _view_level_2(index_jsonl: str, model: Optional[str] = None) -> Dict[str, An
 				"turn_count": len(pairs),
 				"macro": heuristic.get("macro", ""),
 			}
-	
+
 	# LLM-based corpus summary if model provided
 	if model:
 		try:
@@ -200,20 +200,20 @@ def _view_level_2(index_jsonl: str, model: Optional[str] = None) -> Dict[str, An
 						"macro": heuristic.get("macro", ""),
 						"turn_count": len(pairs),
 					})
-			
+
 			# Summarize corpus
 			corpus_text = "\n\n".join([
 				f"Conversation {c['composer_id']}: {c['macro']} ({c['turn_count']} turns)"
 				for c in sample_convs
 			])
-			
+
 			instructions = (
 				"Summarize this corpus of conversations into STRICT JSON with keys: "
 				"theme (overall theme across conversations), "
 				"patterns (array of 5-10 common patterns), "
 				"topics (array of 5-10 main topics)."
 			)
-			
+
 			resp = client.chat.completions.create(
 				model=model,
 				messages=[
@@ -228,7 +228,7 @@ def _view_level_2(index_jsonl: str, model: Optional[str] = None) -> Dict[str, An
 				corpus_data["llm_raw"] = text
 		except Exception as e:
 			corpus_data["llm_error"] = str(e)
-	
+
 	return corpus_data
 
 
@@ -248,7 +248,7 @@ def _view_level_recursive(
 	"""
 	index_path = expand_abs(index_jsonl)
 	conversations: Dict[str, List[Dict]] = {}
-	
+
 	# Load conversations
 	with open(index_path, "r", encoding="utf-8") as f:
 		for line in f:
@@ -259,7 +259,7 @@ def _view_level_recursive(
 					conversations.setdefault(cid, []).append(item)
 			except Exception:
 				continue
-	
+
 	# Prepare items for multiscale package
 	items: List[Dict[str, Any]] = []
 	for cid, items_list in list(conversations.items())[:100]:  # Limit for performance
@@ -282,10 +282,10 @@ def _view_level_recursive(
 				"composer_id": cid,
 				"turn_count": len(pairs),
 			})
-	
+
 	if not model:
 		model = os.getenv("OPENAI_SMALL_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
-	
+
 	# Use multiscale package if available
 	if _HAS_MULTISCALE:
 		try:
@@ -308,26 +308,26 @@ def _view_level_recursive(
 					"conversation_count": len(conversations),
 				},
 			}
-		except Exception as e:
+		except Exception:
 			# Fall back to local implementation on error
 			pass
-	
+
 	# Fallback: local implementation
 	client = llmmod.require_client()
-	
+
 	# Level 0: Per-conversation summaries
 	level_0: List[Dict] = []
 	for item in items:
 		cid = item.get("composer_id", item.get("id", ""))
 		text = item.get("text", "")
 		turn_count = item.get("turn_count", 0)
-		
+
 		heuristic = annotatemod.annotate_conversation_scales([
 			{"turn_index": i, "user": "", "assistant": ""}
 			for i in range(turn_count)
 		])
 		macro = heuristic.get("macro", "")
-		
+
 		# LLM summary if available
 		summary_text = macro
 		if text:
@@ -350,26 +350,26 @@ def _view_level_recursive(
 					pass
 			except Exception:
 				pass
-		
+
 		level_0.append({
 			"composer_id": cid,
 			"turn_count": turn_count,
 			"summary": summary_text,
 		})
-	
+
 	levels: List[Dict] = [{"level": 0, "items": level_0}]
-	
+
 	# Recursive summarization
 	current = level_0
 	for d in range(max(0, depth - 3)):  # depth 3 = level 0, so subtract 3
 		if len(current) <= 1:
 			break
-		
+
 		# Group into fanout-sized chunks
 		groups: List[List[Dict]] = []
 		for i in range(0, len(current), fanout):
 			groups.append(current[i:i+fanout])
-		
+
 		next_level: List[Dict] = []
 		for grp in groups:
 			# Summarize group
@@ -377,14 +377,14 @@ def _view_level_recursive(
 				f"[{i}] {item.get('summary', '')[:100]}"
 				for i, item in enumerate(grp)
 			])
-			
+
 			system = (
 				"Merge these conversation summaries into STRICT JSON: "
 				"{theme: string, patterns: [string], key_points: [string]}. "
 				"Be concise, aggregate not repeat."
 			)
 			user = group_text
-			
+
 			try:
 				resp = client.chat.completions.create(
 					model=model,
@@ -400,15 +400,15 @@ def _view_level_recursive(
 					summary = {"raw": text}
 			except Exception as e:
 				summary = {"error": str(e)}
-			
+
 			next_level.append({
 				"children": grp,
 				"summary": summary,
 			})
-		
+
 		levels.append({"level": len(levels), "items": next_level})
 		current = next_level
-	
+
 	return {
 		"levels": levels,
 		"meta": {

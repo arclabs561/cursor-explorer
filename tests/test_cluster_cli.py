@@ -39,7 +39,7 @@ def test_cluster_evoc_errors_when_missing_dependency(tmp_path):
 		for it in items:
 			f.write(json.dumps(it) + "\n")
 	out = tmp_path / "evoc.json"
-	proc = run_cli(["cluster-evoc", str(idx), str(out), "--limit", "2"]) 
+	proc = run_cli(["cluster-evoc", str(idx), str(out), "--limit", "2"])
 	assert proc.returncode != 0
 	# error should mention evoc requirement
 	assert "evoc" in (proc.stderr.lower() or "") or "required" in (proc.stderr.lower() or "")

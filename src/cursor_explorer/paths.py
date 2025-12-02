@@ -30,7 +30,7 @@ def default_db_path(agent_type: str = None) -> str:
         except (ValueError, ImportError):
             # Fall back to legacy Cursor implementation
             pass
-    
+
     # Legacy Cursor-specific implementation (backward compatibility)
     env_override = os.getenv("CURSOR_STATE_DB")
     if env_override:

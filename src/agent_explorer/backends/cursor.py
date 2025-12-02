@@ -8,7 +8,7 @@ from agent_explorer.backends.base import AgentBackend
 
 class CursorBackend(AgentBackend):
     """Backend for Cursor AI agent."""
-    
+
     def get_db_path(self, env_override: Optional[str] = None) -> str:
         """Return the default Cursor SQLite DB path.
         
@@ -21,7 +21,7 @@ class CursorBackend(AgentBackend):
         override = env_override or os.getenv(env_var)
         if override:
             return self.expand_path(override)
-        
+
         if sys.platform == "darwin":
             # macOS defaults
             darwin_global = os.path.expanduser(
@@ -35,7 +35,7 @@ class CursorBackend(AgentBackend):
             if os.path.exists(darwin_workspace):
                 return darwin_workspace
             return darwin_global
-        
+
         if os.name == "nt" or sys.platform.startswith("win"):
             # Windows defaults
             appdata = os.environ.get("APPDATA", "")
@@ -46,7 +46,7 @@ class CursorBackend(AgentBackend):
             if os.path.exists(win_workspace):
                 return win_workspace
             return win_global
-        
+
         # Linux / other Unix
         lin_global = os.path.expanduser("~/.config/Cursor/User/globalStorage/state.vscdb")
         lin_workspace = os.path.expanduser("~/.config/Cursor/User/workspaceStorage/state.vscdb")
@@ -55,11 +55,11 @@ class CursorBackend(AgentBackend):
         if os.path.exists(lin_workspace):
             return lin_workspace
         return lin_global
-    
+
     def get_table_name(self) -> str:
         """Return Cursor's key-value table name."""
         return "cursorDiskKV"
-    
+
     def get_agent_name(self) -> str:
         """Return agent identifier."""
         return "cursor"

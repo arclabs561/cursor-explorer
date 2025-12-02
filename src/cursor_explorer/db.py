@@ -92,22 +92,22 @@ def kv_keys(
 	query = f"SELECT key FROM {table}"
 	params = []
 	conditions = []
-	
+
 	if prefix:
 		conditions.append("key LIKE ?")
 		params.append(f"{prefix}%")
 	if like:
 		conditions.append("key LIKE ?")
 		params.append(like)
-	
+
 	if conditions:
 		query += " WHERE " + " AND ".join(conditions)
-	
+
 	query += " ORDER BY key"
-	
+
 	if limit:
 		query += f" LIMIT {limit}"
-	
+
 	c.execute(query, params)
 	return [row[0] for row in c.fetchall()]
 
@@ -152,22 +152,22 @@ def search_kv(
 	query = f"SELECT key, LENGTH(value) as size FROM {table}"
 	params = []
 	conditions = []
-	
+
 	if key_like:
 		conditions.append("key LIKE ?")
 		params.append(key_like)
 	if value_contains:
 		conditions.append("value LIKE ?")
 		params.append(f"%{value_contains}%")
-	
+
 	if conditions:
 		query += " WHERE " + " AND ".join(conditions)
-	
+
 	query += " ORDER BY key"
-	
+
 	if limit:
 		query += f" LIMIT {limit}"
-	
+
 	c.execute(query, params)
 	return [(row[0], row[1]) for row in c.fetchall()]
 

@@ -96,7 +96,7 @@ def test_rules_extract_cli(tmp_path):
 
 
 def test_cli_vec_search_rejects_invalid_table_name():
-    proc = run_module(["vec-search", "/tmp/nonexistent.sqlite", "--table", "bad;drop", "--query", "q"]) 
+    proc = run_module(["vec-search", "/tmp/nonexistent.sqlite", "--table", "bad;drop", "--query", "q"])
     assert proc.returncode != 0
     assert "invalid table name" in proc.stdout
 
